@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your Feed</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet"> <!-- Font Awesome for the bell icon -->
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f7fc;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            color: #1877f2;
+        }
+
+        .feed {
+            margin-top: 30px;
+        }
+
+        .post-card {
+            margin-bottom: 30px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .post-card .card-body {
+            padding: 15px;
+        }
+
+        .post-card h5 {
+            color: #333;
+        }
+
+        .post-card p {
+            color: #666;
+        }
+
+        .post-actions button {
+            margin-right: 10px;
+        }
+
+        .comments ul {
+            padding-left: 20px;
+        }
+
+        .navbar {
+            background-color: #1877f2; /* Facebook Blue */
+            padding: 1rem 2rem;
+        }
+
+        .navbar a, .navbar .user-icon {
+            color: white !important;
+            font-weight: 500;
+        }
+
+        .user-icon {
+            display: inline-flex;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .user-icon img {
+            border-radius: 50%;
+            width: 35px;
+            height: 35px;
+            margin-right: 10px;
+        }
+
+        /* Notification Icon */
+        .notification-icon {
+            position: relative;   /* Container with relative positioning */
+            font-size: 1.6rem;     /* Size of the bell icon */
+            color: #fff;
+            cursor: pointer;
+        }
+
+        /* Notification Badge */
+        .notification-badge {
+            position: absolute;
+            top: -5px;             /* Adjust this for vertical positioning */
+            right: -5px;           /* Adjust this for horizontal positioning */
+            background-color: red;
+            color: white;
+            border-radius: 50%;
+            padding: 5px 10px;
+            font-size: 0.6rem;     /* Font size of the badge */
+            display: inline-block;
+            min-width: 20px;       /* Set minimum width for the badge */
+            text-align: center;
+        }
+
+        .notification-modal .modal-dialog {
+            max-width: 400px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <img src="/static/image.png" alt="Logo" style="width: 35px;">
+                Fakebook
+            </a>
+            <div id="userStatus" class="d-flex">
+                <div id="loginIcon" style="display:none;">
+                    <a href="/login" class="user-icon">
+                        <img src="https://via.placeholder.com/30" alt="Login Icon"> Login
+                    </a>
+                </div>
+                <div id="profileIcon" style="display:none;">
+                    <!-- Notification icon before the profile photo -->
+                    <!-- Notification icon with badge inside -->
+                    <div class="user-icon position-relative" id="notificationIcon" style="margin-right: 10px;">
+                        <i class="fas fa-bell"></i> <!-- Font Awesome Bell Icon -->
+                        <!-- Notification Badge -->
+                        <div class="notification-badge" id="notificationCount">0</div>
+                    </div>
+
+
+                    <div class="user-icon" id="userProfile" style="margin-right: 10px;">
+                        <img src="https://i.pravatar.cc/150?img=3" alt="User Avatar"> <!-- Decent Profile Placeholder -->
+                        <span>Profile</span>
+                    </div>
+                    <button id="logoutButton" class="btn btn-light" style="margin-top: 5px;">Logout</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h1>Your Feed</h1>
+
+        <!-- Feed -->
+        <div id="feed" class="feed"></div>
+
+        <!-- Alert Messages -->
+        <div id="alertMessage"></div>
+    </div>
+
+    <!-- Notifications Modal -->
+    <div class="modal fade" id="notificationModal" tabindex="-1" aria-labelledby="notificationModalLabel" aria-hidden="true">
+        <div class="modal-dialog notification-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="notificationModalLabel">Notifications</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <ul id="notificationList" class="list-group">
+                        <!-- Notifications will be populated here -->
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Check if the user is logged in
+        function checkLoginStatus() {
+            const token = localStorage.getItem('authToken');
+            const loginIcon = document.getElementById('loginIcon');
+            const profileIcon = document.getElementById('profileIcon');
+            const logoutButton = document.getElementById('logoutButton');
+
+            if (token) {
+                loginIcon.style.display = 'none';
+                profileIcon.style.display = 'flex';
+                logoutButton.style.display = 'inline-block';
+            } else {
+                loginIcon.style.display = 'flex';
+                profileIcon.style.display = 'none';
+            }
+        }
+
+        // Handle Logout
+        function handleLogout() {
+            localStorage.removeItem('authToken');
+            checkLoginStatus();
+            alert('Logged out successfully!');
+            window.location.href = '/login';
+        }
+
+        // Fetch the feed posts
+        async function loadFeed() {
+            try {
+                const response = await fetch('/feeds/', {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` }
+                });
+
+                if (!response.ok) throw new Error('Failed to fetch feed');
+
+                const data = await response.json();
+                const feedDiv = document.getElementById('feed');
+                feedDiv.innerHTML = ''; // Clear previous feed
+
+                if (data.feed.length === 0) {
+                    feedDiv.innerHTML = '<p>No posts available.</p>';
+                    return;
+                }
+
+                data.feed.forEach(post => {
+                    const postElement = document.createElement('div');
+                    postElement.classList.add('post-card', 'card');
+                    postElement.innerHTML = `
+                        <div class="card-body">
+                            <h5 class="card-title">${post.user_id ? 'User ' + post.user_id : 'Anonymous'} posted:</h5>
+                            <p class="card-text">${post.content}</p>
+                            ${
+                            post.media
+                                ? `<img src="${post.media}" alt="Post Photo" style="width:50%; height:auto; border-radius:8px; margin:10px 0;">`
+                                : ''
+                            }
+                            <p>Likes: ${post.likes.length}</p>
+                            <div class="comments">
+                                <p><strong>Comments:</strong></p>
+                                <ul>
+                                    ${post.comments.map(comment => `<li><strong>User ${comment.user_id}:</strong> ${comment.comment}</li>`).join('')}
+                                </ul>
+                            </div>
+                            <div class="post-actions">
+                                <button class="btn btn-success likeButton" data-post-id="${post.post_id}">Like</button>
+                                <button class="btn btn-info commentButton" data-post-id="${post.post_id}">Comment</button>
+                            </div>
+                        </div>
+                    `;
+                    feedDiv.appendChild(postElement);
+                });
+            } catch (error) {
+                showAlert(`Error loading feed: ${error.message}`, 'danger');
+            }
+        }
+
+        // Like a post
+        async function likePost(postId) {
+            try {
+                const response = await fetch('posts/like', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                    },
+                    body: JSON.stringify({ post_id: postId })
+                });
+
+                const data = await response.json();
+                showAlert(data.message, 'success');
+                loadFeed(); // Refresh feed
+            } catch (error) {
+                showAlert(`Error liking post: ${error.message}`, 'danger');
+            }
+        }
+
+        // Comment on a post
+        async function commentOnPost(postId) {
+            const comment = prompt('Enter your comment:');
+            if (!comment) return;
+
+            try {
+                const response = await fetch('/posts/comment', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                    },
+                    body: JSON.stringify({ post_id: postId, comment })
+                });
+
+                const data = await response.json();
+                showAlert(data.message, 'success');
+                loadFeed(); // Refresh feed
+            } catch (error) {
+                showAlert(`Error commenting on post: ${error.message}`, 'danger');
+            }
+        }
+
+        // Show alert messages
+        function showAlert(message, type) {
+            const alertDiv = document.getElementById('alertMessage');
+            alertDiv.innerHTML = `
+                <div class="alert alert-${type}" role="alert">
+                    ${message}
+                </div>
+            `;
+            setTimeout(() => alertDiv.innerHTML = '', 3000);
+        }
+
+        // Load notifications
+        async function loadNotifications() {
+            const token = localStorage.getItem('authToken');
+            if (!token) return;
+
+            try {
+                const response = await fetch('/posts/notifications/', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) throw new Error('Failed to fetch notifications');
+
+                const data = await response.json();
+                const notificationList = document.getElementById('notificationList');
+                notificationList.innerHTML = ''; // Clear previous notifications
+
+                console.log(data.notification)
+
+                data.notifications.forEach(notification => {
+                    const listItem = document.createElement('li');
+                    listItem.classList.add('list-group-item');
+                    listItem.innerHTML = `You got a 
+                        <strong>${notification.type}</strong> from User ${notification.from_user} on your post.
+                    `;
+                    notificationList.appendChild(listItem);
+                });
+
+                document.getElementById('notificationCount').textContent = data.notifications.length;
+            } catch (error) {
+                console.error('Error loading notifications:', error);
+            }
+        }
+
+        // Event listeners for like and comment buttons
+        document.addEventListener('click', event => {
+            if (event.target.classList.contains('likeButton')) {
+                const postId = event.target.getAttribute('data-post-id');
+                likePost(postId);
+            }
+            if (event.target.classList.contains('commentButton')) {
+                const postId = event.target.getAttribute('data-post-id');
+                commentOnPost(postId);
+            }
+        });
+
+        // Notification icon click event to show notifications modal
+        document.getElementById('notificationIcon').addEventListener('click', () => {
+            const modal = new bootstrap.Modal(document.getElementById('notificationModal'));
+            modal.show();  // Show the modal using Bootstrap's API
+            loadNotifications();  // Load notifications when modal is shown
+        });
+
+        // Logout button event listener
+        document.getElementById('logoutButton').addEventListener('click', handleLogout);
+
+        // On page load
+        window.onload = () => {
+            loadFeed();
+            checkLoginStatus();
+        };
+    </script>
+
+    <!-- Popper.js (Bootstrap 5 Dependency) -->
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.min.js"></script>
+
+</body>
+</html>

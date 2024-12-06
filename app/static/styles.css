@@ -1,0 +1,25 @@
+/* Custom styles for homepage */
+body {
+    background-color: #f0f2f5;
+    font-family: Arial, sans-serif;
+}
+
+header h1 {
+    color: #1877f2;
+    font-size: 36px;
+    font-weight: bold;
+}
+
+header p {
+    color: #606770;
+    font-size: 18px;
+}
+
+button {
+    margin: 10px;
+}
+
+footer p {
+    color: #606770;
+    font-size: 14px;
+}
